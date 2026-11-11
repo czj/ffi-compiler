@@ -86,7 +86,7 @@ module FFI
       end
 
       def have_header?(header, *paths)
-        try_header(header, @include_paths) || try_header(header, paths)
+        try_header(header, paths)
       end
 
       def have_library?(libname, *paths)
@@ -199,20 +199,15 @@ module FFI
         task :package => [ :api_headers ]
       end
 
+      # Compiles with the task's cflags, defines and known include paths, so the first try
+      # needs no extra path.
       def try_header(header, paths)
-        main = <<-C_FILE
-          #include <#{header}>
-          int main(int argc, char **argv) { return 0; }
-        C_FILE
+        main = "#include <#{header}>\nint main(void) { return 0; }\n"
+        flags = @cflags.to_a + @defines + @include_paths.map { |path| "-I#{path}" }
 
-        if paths.empty? && try_compile(main)
-          @headers << header
-          return true
-        end
-
-        paths.each do |path|
-          if try_compile(main, "-I#{path}")
-            @include_paths << path
+        [nil, *paths].each do |path|
+          if try_compile(main, *flags, *("-I#{path}" if path))
+            @include_paths << path if path && !@include_paths.include?(path)
             @headers << header
             return true
           end
